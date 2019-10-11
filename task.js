@@ -1,6 +1,5 @@
 class Company {
     constructor() {
-        this.CEO = new CEO();
         this.testDepartment = new Department();
         this.webDepartment = new Department();
         this.mobDepartment = new Department();
@@ -10,50 +9,54 @@ class Company {
 
 class Department {
     constructor() {
-        this.projects = [];
-        this.employeesBusy = [];
-        this.employeesFree = [];
+        this._employees= [];
     }
 
     set projects(project) {
+        let freeEmployees = this._employees.filter(empl => empl.onProject == false)
+        if (freeEmployees.length) {
+            const pushEmployee = function (duration) {
+                const lastEmployee = freeEmployees[freeEmployees.length - 1];
+                this._projects.push(project);
+                lastEmployee.freeForDays = 0;
+                lastEmployee.willBeBusyForDays = duration;
+                this._employeesBusy.push(this._employeesFree.pop())
+            }
 
-        const pushEmployee = function (duration) {
-            const lastEmployee = this.employeesFree[this.employeesFree.length - 1];
-            this.projects.push(project);
-            lastEmployee.freeForDays = 0;
-            lastEmployee.willBeBusyForDays = duration;
-            this.employeesBusy.push(this.employeesFree.pop())
+            switch (project.type) {
+                case 'web':
+                case 'test':
+                    if (this._employeesFree.length > 0) {
+                        pushEmployee(project.complexity);
+                    }
+                    break;
+                case 'mob':
+                    if (this._employeesFree.length >= project.complexity) {
+                        pushEmployee(project.complexity);
+                    }
+                    break;
+            }
         }
-
-        switch (project.type) {
-            case 'web':
-            case 'test':
-                if (this.employeesFree.length > 0) {
-                    pushEmployee(project.complexity);
-                }
-                break;
-            case 'mob':
-                if (this.employeesFree.length >= project.complexity) {
-                    pushEmployee(project.complexity);
-                }
-                break;
-        }
-
     }
 
-    set employeesFree() {
-        this.employeesFree.push(new Employee());
+
+    set employees(number) {
+        for (let i = 1; i <= number; i++) {
+            this._employeesFree.push(new Employee());
+        }
     }
 
 }
 
 class CEO {
     constructor() {
-        this.projects = [];
+        this.projectsForWeb = [];
+        this.projectsForMob = [];
         this.projectsForTest = [];
+        this.company = new Company();
     }
 
-    set projects() {
+    receiveProjects() {
         function getRandomInt(min, max) {
             return Math.floor(Math.random() * (max - min + 1)) + min;
         }
@@ -61,26 +64,103 @@ class CEO {
         let projectComplexity = getRandomInt(1, 3);
         let projectType = getRandomInt(1, 2);
         for (let i = 1; i <= projectsQuantity; i++) {
-            this.projects.push(new Project(projectType, projectComplexity))
+            let newProject = new Project(projectType, projectComplexity);
+            newProject.type === 'web'? this.projectsForWeb.push(newProject) :
+                                        this.projectsForMob.push(newProject);
         }
     }
 }
 
 CEO.prototype.hire = function () {
-    let necessaryDevelopers = 0;
+    let necessaryWeb = 0;
+    let necessaryMob = 0;
     let necessaryTesters = this.projectsForTest.length;
-    let currentProject = this.projects[i];
     for (let i = 0; i < this.projects.length; i++) {
+        let currentProject = this.projects[i];
         switch (currentProject.type) {
             case 'web':
-                necessaryDevelopers += 1;
+                necessaryWeb += 1;
                 break;
             case 'mob':
-                necessaryDevelopers += currentProject.complexity;
+                necessaryMob += currentProject.complexity;
                 break;
 
         }
     }
+    this.company.testDepartment.employees = necessaryTesters;
+    this.company.webDepartment.employees = necessaryWeb;
+    this.company.mobDepartment.employees = necessaryMob;
+}
+
+CEO.prototype.fire = function () {
+    let compare = function (a, b) {
+        return a.projectsDone - b.projectsDone;
+    }
+    for (let dep of this.company) {
+        dep._employeesFree.filter(emp => { emp.freeForDays > 3 })
+            .sort(compare)
+            .shift()
+    }
+}
+
+CEO.prototype.handProjectsOver = function () {
+    let passToDepartment = function (dep) {
+
+        let freeDevs = this.company[`${dep}Department`]._employees.filter(empl => empl.onProject == false);
+        let necessaryDevs = dep === 'mob' ? this.projectsForMob.map(proj => proj.complexity).reduce((acc, curr) => acc + curr) :
+            this[`projectsFor${dep}`].length;
+
+        if (!freeDevs.length) {
+            return
+        }
+        switch (dep) {
+            case 'test':
+                freeDevs.map(dev => {
+                    if (!dev.onProject) {
+                        dev.onProject = true;
+                        dev.projectDuration = 1;
+                        dev.freeForDays = 0;
+                    }
+                });
+                freeDevs >= necessaryDevs? 
+                this.projectsForWeb.splice(0, necessaryDevs) : 
+                this.projectsForWeb.splice(0, freeDevs);
+                break;
+
+            case 'web':
+                freeDevs.map((empl, index) => {
+                    if (!empl.onProject && this[`projectsFor${dep}`][index]) {
+                        empl.onProject = true;
+                        empl.freeForDays = 0;
+                        empl.projectDuration = this[`projectsFor${dep}`][index].complexity;
+                    }
+                })
+                freeDevs >= necessaryDevs? 
+                this.projectsForWeb.splice(0, necessaryDevs) : 
+                this.projectsForWeb.splice(0, freeDevs);
+                break;
+            case 'mob':
+                let assignProject = function(num) {
+                    const mobDep = this.company.mobDepartment._employees;
+                    let ind = mobDep.findIndex(empl => empl.onProject == false);
+                    mobDep[ind].onProject = true;
+                    mobDep[ind].projectDuration = num;
+                    mobDep[ind].freeForDays = 0;
+                }
+
+                this.projectsForMob.forEach(proj => {
+                    if (freeDevs >= proj.complexity) {
+                        for (let i = 1; i <= proj.complexity; i++) {
+                            assignProject(proj.complexity)
+                        }
+                        this.projectsForMob.shift();
+                    }
+                })
+        }
+    }
+    passToDepartment('mob');
+    passToDepartment('web');
+    passToDepartment('test');
 }
 
 class Project {
@@ -94,7 +174,8 @@ class Project {
 class Employee {
     constructor() {
         this.projectsDone = 0;
-        this.willBeBusyForDays = 0;
+        this.onProject = false;
+        this.projectDuration = 0;
         this.freeForDays = 0;
     }
 }
@@ -105,17 +186,17 @@ class WorkPeriod {
     }
 }
 
-WorkPeriod.prototype.startPeriod = function() {
+WorkPeriod.prototype.startPeriod = function () {
     for (let i = 1; i <= this.duration; i++) {
         this.newDayHasCome();
         this.workdayIsOver();
     }
 }
 
-WorkPeriod.prototype.newDayHasCome = function() {
+WorkPeriod.prototype.newDayHasCome = function () {
 
 }
 
-WorkPeriod.prototype.workdayIsOver = function() {
+WorkPeriod.prototype.workdayIsOver = function () {
 
 }
