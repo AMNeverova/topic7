@@ -9,8 +9,8 @@ class Project {
 class Employee {
     constructor() {
         this.projectsDone = 0;
-        this.projectDuration = 0;
         this.freeForDays = 0;
+        this.busyForDays = 0;
     }
 }
 class Company {
@@ -41,8 +41,9 @@ Company.prototype.workdayHasFinished = function () {
 
 Company.prototype.dayCounter = function (dep) {
     const currentDep = this[`${dep}Department`];
-    currentDep.busyEmployees.map(empl => {
-        empl.busyForDays--;
+    currentDep.busyEmployees.forEach((empl, index) => {
+
+       empl.busyForDays--;
     })
     currentDep.freeEmployees.map(empl => {
         empl.freeForDays++
@@ -50,21 +51,21 @@ Company.prototype.dayCounter = function (dep) {
     currentDep.busyEmployees.sort((a, b) => a.busyForDays - b.busyForDays);
     console.log(this.CEO)
     if (currentDep.busyEmployees.length) {
-          while (!currentDep.busyEmployees[0].busyForDays) {
-        switch (dep) {
-            case 'web':
-            case 'mob':
-                this.CEO.testProjects++;
-                break;
-            case 'test':
-                this.CEO.report.projectsDone++;
-                break;
+        while (!currentDep.busyEmployees[0].busyForDays) {
+            switch (dep) {
+                case 'web':
+                case 'mob':
+                    this.CEO.testProjects++;
+                    break;
+                case 'test':
+                    this.CEO.report.projectsDone++;
+                    break;
+            }
+            currentDep.busyEmployees[0].projectsDone++;
+            currentDep.freeEmployees.push(currentDep.busyEmployees[0]);
+            currentDep.busyEmployees.shift();
         }
-        currentDep.busyEmployees[0].projectsDone++;
-        currentDep.freeEmployees.push(currentDep.busyEmployees[0]);
-        currentDep.busyEmployees.shift();
-    }
-  
+
     }
 
 }
@@ -73,6 +74,8 @@ Company.prototype.workPeriod = function (duration) {
     for (let i = 1; i <= duration; i++) {
         this.newDayHasCome();
         this.workdayHasFinished();
+        console.log(`day ${i} passed`)
+        console.log(this)
     }
 }
 
@@ -94,9 +97,9 @@ CEO.prototype.receiveProjects = function () {
     function getRandomInt(min, max) {
         return Math.floor(Math.random() * (max - min + 1)) + min;
     }
-    let projectsQuantity = getRandomInt(0, 4);
-    let projectComplexity = getRandomInt(1, 3);
-    let projectType = getRandomInt(0, 1);
+    let projectsQuantity = getRandomInt(2, 2);
+    let projectComplexity = getRandomInt(2, 2);
+    let projectType = getRandomInt(1, 1);
     for (let i = 1; i <= projectsQuantity; i++) {
         let newProject = new Project(projectType, projectComplexity);
         newProject.type === 'web' ? this.webProjects.push(newProject) :
@@ -104,17 +107,28 @@ CEO.prototype.receiveProjects = function () {
     }
 }
 
-CEO.prototype.hire = function (name) {    
-        const quantity = name == 'test'? this.testProjects : this[`${name}Projects`].length;
+CEO.prototype.hire = function (name) {
+    let quantity = 0;
+    switch (name) {
+        case 'test':
+            quantity = this.testProjects;
+            break;
+        case 'mob':
+            quantity = this.mobProjects.length ? this.mobProjects.map(proj => proj.complexity).reduce((acc, curr) => (acc + curr), 0) : 0;
+            break;
+        case 'web':
+            quantity = this.webProjects.length;
+            break;
+    }
 
-        if (quantity) {
-            this.deps[`${name}Dep`].freeEmployees = this[`${name}Projects`].length;
-            this.report.developersHired += this[`${name}Projects`].length;
-        }
+    if (quantity) {
+        this.deps[`${name}Dep`].freeEmployees = quantity;
+        this.report.developersHired += quantity;
+    }
 }
 
 CEO.prototype.fire = function () {
-    
+
     for (let dep in this.deps) {
         console.log(this.deps[dep])
         if (!this.deps[dep].freeEmployees.length) {
@@ -144,8 +158,8 @@ CEO.prototype.handProjectsOver = function (name) {
             }
             break;
         case 'mob':
-            while (this.testProjects.length && this.deps.mobDep.freeEmployees.length >= this.testProjects[0].complexity) {
-                this.mobDep.projectsInProgress.assignProject(this.mobProjects[0]);
+            while (this.mobProjects.length && this.deps.mobDep.freeEmployees.length >= this.mobProjects[0].complexity) {
+                this.deps.mobDep.assignProject(this.mobProjects[0]);
                 this.mobProjects.shift();
             }
             break;
@@ -164,30 +178,31 @@ class Department {
     }
 
     set freeEmployees(num) {
-        let newEmpls = new Array(num).fill(new Employee());
-        this._freeEmployees.concat(newEmpls);
+        for (let i = 1; i <= num; i++) {
+            this._freeEmployees.push(new Employee());
+        }
     }
 
     assignProject(proj) {
-        let pushEmployee = function () {
-            this._freeEmployees[0].freeForDays = 0;
-            this._busyEmployees.push(this._freeEmployees[0]);
-            this._freeEmployees.shift();
+        let pushEmployee = function (t) {
+            t._freeEmployees[0].freeForDays = 0;
+            t._busyEmployees.push(t._freeEmployees[0]);
+            t._freeEmployees.shift();
         }
         switch (proj.type) {
             case 'web':
                 this._freeEmployees[0].busyForDays = proj.complexity;
-                pushEmployee();
+                pushEmployee(this);
                 break;
             case 'mob':
                 for (let i = 1; i <= proj.complexity; i++) {
                     this._freeEmployees[0].busyForDays = proj.complexity;
-                    pushEmployee();
+                    pushEmployee(this);
                 }
                 break;
             case 'test':
                 this._freeEmployees[0].busyForDays = 1;
-                pushEmployee();
+                pushEmployee(this);
                 break;
         }
     }
@@ -198,5 +213,6 @@ class Department {
 }
 
 let newOrg = new Company();
-newOrg.workPeriod(2)
+newOrg.workPeriod(5)
 console.log(newOrg)
+console.log(newOrg.CEO.report);
