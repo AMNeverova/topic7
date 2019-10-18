@@ -55,48 +55,55 @@ class Company {
                 .map(proj => proj.employees).flat();
             switch (dep) {
                 case 'webDep':
+                    const webDep = this.deps.webDep;
                     for (let i = 0; i < developersGotFree.length; i++) {
-                        let index = this.deps.webDep.busyEmployees.findIndex(empl => empl.id == developersGotFree[i]);
-                        this.deps.webDep.freeEmployees.unshift(this.deps.webDep.busyEmployees[index]);
-                        this.deps.webDep.freeEmployees[0].projectsDone++;
-                        this.deps.webDep.busyEmployees.splice(index, 1);
+                        let index = webDep.busyEmployees.findIndex(empl => empl.id == developersGotFree[i]);
+                        webDep.freeEmployees.unshift(webDep.busyEmployees[index]);
+                        webDep.freeEmployees[0].projectsDone++;
+                        webDep.busyEmployees.splice(index, 1);
                     }
                     break;
                 case 'mobDep':
+                    const mobDep = this.deps.mobDep; 
                     for (let i = 0; i < developersGotFree.length; i++) {
-                        let index = this.deps.mobDep.busyEmployees.findIndex(empl => empl.id == developersGotFree[i]);
-                        this.deps.mobDep.freeEmployees.unshift(this.deps.mobDep.busyEmployees[index]);
-                        this.deps.mobDep.freeEmployees[0].projectsDone++;
-                        this.deps.mobDep.busyEmployees.splice(index, 1);
+                        let index = mobDep.busyEmployees.findIndex(empl => empl.id == developersGotFree[i]);
+                        mobDep.freeEmployees.unshift(mobDep.busyEmployees[index]);
+                        mobDep.freeEmployees[0].projectsDone++;
+                        mobDep.busyEmployees.splice(index, 1);
                     }
                     break;
                 case 'testDep':
-                    this.CEO.report.addProjectDone(this.deps.testDep.projectsInProgress.length);
-                    this.deps.testDep.projectsInProgress = [];
-                    this.deps.testDep.busyEmployees.map(empl => {
-                        this.deps.testDep.freeEmployees.unshift(empl);
-                        this.deps.testDep.freeEmployees[0].projectsDone++;
+                    const testDep = this.deps.testDep;
+                    this.CEO.report.addProjectDone(testDep.projectsInProgress.length);
+                    testDep.projectsInProgress = [];
+                    testDep.busyEmployees.map(empl => {
+                        testDep.freeEmployees.unshift(empl);
+                        testDep.freeEmployees[0].projectsDone++;
                     })
-                    this.deps.testDep.busyEmployees = [];
+                    testDep.busyEmployees = [];
             }
         }
     }
 
     moveProjectsToTestDep() {
-        this.deps.webDep.projectsInProgress.sort((a, b) => a.daysToFinish - b.daysToFinish);
-        this.deps.mobDep.projectsInProgress.sort((a, b) => a.daysToFinish - b.daysToFinish);
-        if (this.deps.mobDep.projectsInProgress.length) {
-            while (this.deps.mobDep.projectsInProgress.length && !this.deps.mobDep.projectsInProgress[0].daysToFinish) {
-                this.CEO.projects.testProjects.unshift(this.deps.mobDep.projectsInProgress.shift());
-                this.CEO.projects.testProjects[0].employees = [];
-                this.CEO.projects.testProjects[0].type = 'test';
+        const testProjects = this.CEO.projects.testProjects;
+        const mobProjectsInProgress = this.deps.mobDep.projectsInProgress;
+        const webProjectsInProgress = this.deps.webDep.projectsInProgress;
+        
+        webProjectsInProgress.sort((a, b) => a.daysToFinish - b.daysToFinish);
+        mobProjectsInProgress.sort((a, b) => a.daysToFinish - b.daysToFinish);
+        if (mobProjectsInProgress.length) {
+            while (mobProjectsInProgress.length && !mobProjectsInProgress[0].daysToFinish) {
+                testProjects.unshift(mobProjectsInProgress.shift());
+                testProjects[0].employees = [];
+                testProjects[0].type = 'test';
             }
         }
-        if (this.deps.webDep.projectsInProgress.length) {
-            while (this.deps.webDep.projectsInProgress.length && !this.deps.webDep.projectsInProgress[0].daysToFinish) {
-                this.CEO.projects.testProjects.unshift(this.deps.webDep.projectsInProgress.shift());
-                this.CEO.projects.testProjects[0].employees = [];
-                this.CEO.projects.testProjects[0].type = 'test';
+        if (webProjectsInProgress.length) {
+            while (webProjectsInProgress.length && !webProjectsInProgress[0].daysToFinish) {
+                testProjects.unshift(webProjectsInProgress.shift());
+                testProjects[0].employees = [];
+                testProjects[0].type = 'test';
             }
         }
     }
@@ -130,11 +137,12 @@ class WebDepartment extends Department {
     }
 
     assignProject(proj) {
+        const projects = this.projectsInProgress;
         let firstFreeEmployee = this.freeEmployees[0];
-        this.projectsInProgress.unshift(proj);
-        this.projectsInProgress[0].employees.push(firstFreeEmployee.id)
+        projects.unshift(proj);
+        projects[0].employees.push(firstFreeEmployee.id);
         firstFreeEmployee.freeForDays = 0;
-        this.projectsInProgress[0].daysToFinish = proj.complexity;
+        projects[0].daysToFinish = proj.complexity;
         this.busyEmployees.push(this.freeEmployees.shift());
     }
 }
@@ -146,8 +154,9 @@ class MobDepartment extends Department {
 
     assignProject(proj) {
         const firstFreeEmpl = this.freeEmployees[0];
+        const projects = this.projectsInProgress;
         if (this.freeEmployees.length >= proj.complexity) {
-            this.projectsInProgress.unshift(proj);
+            projects.unshift(proj);
             const currentProject = this.projectsInProgress[0];
             currentProject.daysToFinish = 1;
             for (let i = 0; i < proj.complexity; i++) {
@@ -159,9 +168,9 @@ class MobDepartment extends Department {
             this.freeEmployees.splice(0, proj.complexity)
         } else {
             firstFreeEmpl.freeForDays = 0;
-            this.projectsInProgress.unshift(proj);
-            this.projectsInProgress[0].employees.push(firstFreeEmpl.id);
-            this.projectsInProgress[0].daysToFinish = proj.complexity;
+            projects.unshift(proj);
+            projects[0].employees.push(firstFreeEmpl.id);
+            projects[0].daysToFinish = proj.complexity;
             this.busyEmployees.push(firstFreeEmpl);
             this.freeEmployees.shift();
         }
@@ -174,10 +183,11 @@ class TestDepartment extends Department {
     }
 
     assignProject(proj) {
+        const projects = this.projectsInProgress;
         this.freeEmployees[0].freeForDays = 0;
-        this.projectsInProgress.unshift(proj);
-        this.projectsInProgress[0].employees.push(this.freeEmployees[0].id);
-        this.projectsInProgress[0].daysToFinish = 1;
+        projects.unshift(proj);
+        projects[0].employees.push(this.freeEmployees[0].id);
+        projects[0].daysToFinish = 1;
         this.busyEmployees.push(this.freeEmployees.shift());
     }
 }
@@ -200,6 +210,8 @@ class CEO {
         this.handProjectOver();
         this.fire();
     }
+
+    
 
     getRandomInt(min, max) {
         return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -235,6 +247,7 @@ class CEO {
                 const worstDevIndex = this.deps[dep].freeEmployees.findIndex(empl => empl.id == worstDevID);
                 this.deps[dep].freeEmployees.splice(worstDevIndex, 1);
                 this.report.addDevelopersFired(1);
+                console.log('fired');
             }
         }
     }
@@ -289,6 +302,6 @@ class Report {
     }
 }
 let newOrg = new Company()
-newOrg.workPeriod(15)
+newOrg.workPeriod(20)
 console.log(newOrg)
 console.log(newOrg.CEO.report)
